@@ -96,15 +96,17 @@ This uses the built-in Ableton LFO included with Live 11 Intro; it does not requ
 
 ## Transform controls
 
-Build after Evolving and load `dist/Infisound Transform/Infisound Transform.adg`. Keep the Expanded sample folder in place.
+Build after Evolving and load `dist/Infisound Transform/Infisound Transform.adg`. Transform creates its own corrected samples: keep its adjacent `Samples/` folder in place. Earlier builders are required during generation.
 
 - **Morph** blends the Sine/Saw pair with the Metal/Vowel pair. **Material** crossfades within each pair. All four voices have full MIDI selector ranges, with complementary audio fades, so held notes can change timbre.
 - **Tone** spans a much wider filter range. **Texture** adds stronger drive and chorus; **Grain** reaches deeper bitcrushing.
-- **Envelope** varies attack, sustain, and decay. **Space** also changes release. Envelope changes affect note articulation and are most obvious with new notes. **Env Depth** remains manual.
-- The outer knobs are movement centers; **Moving Sound** shows actual changing values. **Rand** changes the first ten centers plus Morph. Freeze, Depth, Smooth, Output, and Env Depth stay protected.
+- **Envelope** varies attack, sustain, and decay. **Space** also changes release. Envelope changes affect note articulation and are most obvious with new notes. Filter-envelope depth stays fixed internally.
+- The outer knobs are movement centers; **Moving Sound** shows actual changing values. **Rand** changes the first ten centers plus Morph. Freeze, Depth, Smooth, Output, and Sweep Time stay protected.
+- **Sweep 2–60s** replaces the outer Env Depth control and sets all eleven LFO cycle times. Higher values are slower; 0 ≈ 2s, 32 ≈ 3.4s, 64 ≈ 6.7s, 80 ≈ 10s (default), 96 ≈ 16.3s, 112 ≈ 29.5s, and 127 ≈ 60s. The number shown is the native 0–127 macro value, not seconds. This sets a full sweep cycle, not a guaranteed patch-to-patch transition duration.
+- Samples have aligned fundamental polarity, a reinforced fundamental, and matched RMS targets with a peak cap. The filter starts at 500 Hz with full key tracking; sustain is bounded above zero and the automatic attack is capped at 180 ms. This reduces weak patches without removing timbral variation.
 - Depth defaults to maximum. Two crossfade stages and additional headroom help contain the combined voices, but this is not loudness-normalized; timbres can differ in perceived level.
 
-Transform checks four voices, full MIDI zones, complementary fade endpoints, eleven LFOs, sample paths, and output protection. The preset loaded in Live 11.3.43 Intro and both morph controls were observed moving. Listening and held-note crossfade verification are still required.
+Transform checks four voices, full MIDI zones, complementary fade endpoints, eleven LFOs, sample paths, and output protection. The preset loaded in Live 11.3.43 Intro and both morph controls were observed moving; the user reported improved timbral variety. The updated rate mapping displayed 0.10 Hz at its default value of 80 in Live. A 17×17 grid of source blends has a minimum RMS of 0.262 before rack gain and effects. This source-level test does not prove equal perceived loudness or audibility at every pitch and downstream effect setting. Complete endpoint timing and listening checks remain outstanding.
 
 ## Implementation and validation
 

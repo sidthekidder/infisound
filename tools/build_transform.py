@@ -4,10 +4,50 @@ import copy
 import gzip
 import os
 import json
+import math
+import struct
+import wave
 import xml.etree.ElementTree as E
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = Path(os.environ.get('INFISOUND_OUTPUT_DIR', str(ROOT / 'dist'))).expanduser().resolve()
+SAMPLES = DIST / 'Infisound Transform/Samples'
+SAMPLES.mkdir(parents=True, exist_ok=True)
+
+def rate_value(seconds):
+    # Live 11 LFO frequency dial uses an 8/3 power curve, not raw Hz.
+    # 10 s was independently calibrated through Live at 4.22948265.
+    return 40 * ((1 / seconds) / 40) ** (3 / 8)
+
+RATE_FAST, RATE_SLOW = rate_value(2), rate_value(60)
+RATE_DEFAULT = round(127 * (rate_value(10) - RATE_FAST) / (RATE_SLOW - RATE_FAST))
+source_audio = []
+
+def prepare_sample(name, synth):
+    source = Path(synth.find('.//SampleRef/FileRef/Path').get('Value'))
+    with wave.open(str(source), 'rb') as wav:
+        assert wav.getnchannels() == 1 and wav.getsampwidth() == 2
+        rate = wav.getframerate()
+        samples = [v / 32768 for v in struct.unpack('<' + 'h' * wav.getnframes(), wav.readframes(wav.getnframes()))]
+    sine = [math.sin(2 * math.pi * i / len(samples)) for i in range(len(samples))]
+    fundamental = 2 * sum(a*b for a,b in zip(samples, sine)) / len(samples)
+    if fundamental < 0:
+        samples = [-v for v in samples]
+        fundamental = -fundamental
+    # Preserve each source's harmonics while giving every blend a shared,
+    # in-phase fundamental. Never overwrite Expanded's original samples.
+    samples = [v + max(0, .30 - fundamental) * s for v,s in zip(samples, sine)]
+    rms = math.sqrt(sum(v*v for v in samples) / len(samples))
+    gain = min(.35 / rms, .85 / max(map(abs, samples)))
+    samples = [v * gain for v in samples]
+    output = SAMPLES / f'{name}.wav'
+    with wave.open(str(output), 'wb') as wav:
+        wav.setparams((1, 2, rate, len(samples), 'NONE', 'not compressed'))
+        wav.writeframes(b''.join(struct.pack('<h', round(v*32767)) for v in samples))
+    ref = synth.find('.//SampleRef/FileRef')
+    setv(ref, 'Path', output)
+    setv(ref, 'OriginalFileSize', output.stat().st_size)
+    source_audio.append(samples)
 
 def setv(e, path, value):
     node = e.find(path)
@@ -60,6 +100,13 @@ for rack in (master, drivers):
     setv(rack, 'MacroControls.13/Manual', 64)
     setv(rack, 'MacroDefaults.13', 64)
 setv(master, 'ExcludeMacroFromRandomization.13', False)
+setv(master, 'MacroDisplayNames.15', 'Sweep 2-60s')
+setv(master, 'MacroControls.15/Manual', RATE_DEFAULT)
+setv(master, 'MacroDefaults.15', RATE_DEFAULT)
+setv(master, 'MacroAnnotations.15', 'Cycle time: 0 = 2s, 80 = about 10s, 127 = 60s. Higher values are slower. Excluded from Rand.')
+# Env Depth stays fixed internally; the outer slot now controls all LFO rates.
+for child in list(drivers.find('MacroControls.15')):
+    if child.tag == 'KeyMidi': drivers.find('MacroControls.15').remove(child)
 # Morph is driven by an LFO; do not also map it from its outer center control.
 for key in list(drivers.find('MacroControls.13')):
     if key.tag == 'KeyMidi':
@@ -99,6 +146,7 @@ for pair_index, names in enumerate([('Sine', 'Saw'), ('Metal', 'Vowel')]):
         for key in list(filter_type):
             if key.tag == 'KeyMidi': filter_type.remove(key)
         setv(filter_type, 'Manual', 0)
+        prepare_sample(name, synth)
         children.append(voice)
     branch = copy.deepcopy(original['Sine'])
     branch.set('Id', str(pair_index))
@@ -112,7 +160,13 @@ for pair_index, names in enumerate([('Sine', 'Saw'), ('Metal', 'Vowel')]):
 
 # Broaden source tone and wet effects without changing final gain or limiter.
 for synth in sound.findall('.//OriginalSimpler'):
-    mapto(synth, 'Filter/Slot/Value/SimplerFilter/Freq', 0, 70, 18000)
+    mapto(synth, 'Filter/Slot/Value/SimplerFilter/Freq', 0, 500, 18000)
+    setv(synth, 'Filter/Slot/Value/SimplerFilter/ModByPitch/Manual', 1)
+    mapto(synth, 'Filter/Slot/Value/SimplerFilter/ModByLfo', 10, 0, .15)
+    mapto(synth, 'Filter/Slot/Value/SimplerFilter/Res', 8, .05, .55)
+    mapto(synth, 'VolumeAndPan/Envelope/AttackTime', 3, 2, 180)
+    mapto(synth, 'VolumeAndPan/Envelope/SustainLevel', 4, .35, 1)
+    mapto(synth, 'VolumeAndPan/Envelope/DecayTime', 5, 200, 3500)
 for redux in root.findall('.//Redux2'):
     mapto(redux, 'DryWet', 6, 0, .7)
 
@@ -131,6 +185,8 @@ devices.append(new_lfo)
 for index, preset in enumerate(list(devices)[1:]):
     lfo = preset.find('Device/MxDeviceAudioEffect')
     params = {p.find('Name').get('Value'): p for p in lfo.findall('ParameterList/ParameterList/*')}
+    mapto(params['Freq Rate'], 'Timeable', 15, RATE_FAST, RATE_SLOW)
+    setv(params['Freq Rate'], 'Timeable/Manual', rate_value(10))
     if index == 8: setv(lfo, 'UserName', 'Evolve Material')
     # Use the full modulation range instead of the old 20–80% window.
     blob = lfo.find('.//Blob')
@@ -156,6 +212,23 @@ for synth in root.findall('.//OriginalSimpler'):
 for i in list(range(10)) + [13]:
     assert sum(e.get('Value') == str(1000+i) for e in root.iter('LomId')) == 4
 assert drivers.find('MacroControls.13/KeyMidi') is None
+assert drivers.find('MacroControls.15/KeyMidi') is None
+assert master.find('ExcludeMacroFromRandomization.15').get('Value') == 'true'
+assert abs(rate_value(10) - 4.22948265) < .00001
+assert RATE_DEFAULT == 80
+for lfo in root.findall('.//MxDeviceAudioEffect'):
+    rate = next(p for p in lfo.findall('ParameterList/ParameterList/*') if p.find('Name').get('Value') == 'Freq Rate')
+    assert rate.find('Timeable/KeyMidi/NoteOrController').get('Value') == '15'
+# Sweep a grid of linear blend weights, including every corner and midpoint.
+# This checks source cancellation, not Live's downstream filters or perceived loudness.
+minimum_rms = 1
+for x in range(17):
+    for y in range(17):
+        a, b = x/16, y/16
+        weights = [(1-a)*(1-b), (1-a)*b, a*(1-b), a*b]
+        blend = [sum(w*s[i] for w,s in zip(weights, source_audio)) for i in range(len(source_audio[0]))]
+        minimum_rms = min(minimum_rms, math.sqrt(sum(v*v for v in blend)/len(blend)))
+assert minimum_rms > .20, minimum_rms
 for path in root.findall('.//SampleRef/FileRef/Path'):
     assert Path(path.get('Value')).is_file()
 E.indent(root)
@@ -164,3 +237,4 @@ output.parent.mkdir(parents=True, exist_ok=True)
 output.write_bytes(gzip.compress(E.tostring(root, encoding='utf-8', xml_declaration=True)))
 print(output)
 print('PASS: four always-addressable voices, three complementary crossfade pairs, eleven LFOs, protected output, sample paths resolved.')
+print(f'PASS: 289 source blends, minimum RMS {minimum_rms:.3f}; all 11 LFO rates mapped to protected 2–60s control.')
