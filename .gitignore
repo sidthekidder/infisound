@@ -1,0 +1,7 @@
+# Machine-specific generated Ableton racks and sample paths
+/dist/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.venv/
