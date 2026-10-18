@@ -164,3 +164,29 @@ The controller runs on Live's main-thread display timer (roughly 100 ms), not at
 Run `python3 -m unittest discover -s tests -v` to check bounds, independent destinations, freeze/resume, rate continuity, and zero-depth behavior. These are algorithm checks; Live integration and listening are separate checks.
 
 Live integration: the controller loaded in Live 11.3.43 Intro with MIDI input/output set to None, discovered the generated rack, and all eleven inner macros were observed changing independently. Seven automated algorithm/adapter tests pass. Full listening and parameter-extreme checks remain separate.
+
+## Character: pads, leads, keys, and plucks
+
+After building Walk, run `python3 tools/build_character.py`. Install the updated `remote_scripts/Infisound_Walk` folder as above and restart Live. The same Control Surface supports both existing Walk racks and the new **Infisound Character** rack. Load `dist/Infisound Character/Infisound Character.adg`; its samples are in the adjacent `Samples` folder.
+
+**Character** replaces Pan Speed on the outer panel and is excluded from Rand:
+
+| Macro value | Character | Behavior |
+| --- | --- | --- |
+| 0–25 | Pads | Slow attack, sustained body, long release, wide saw-rich sources |
+| 26–51 | Leads | Fast attack, high sustain, brighter saw/pulse blends, shorter release |
+| 52–76 | Keys | Fast attack, decaying body, round/FM-style sources |
+| 77–102 | Plucks | Fast attack, short decay, low sustain, stronger filter envelope |
+| 103–127 | Mixed | Chooses a different family about every three Travel durations |
+
+Default is Mixed. The native macro displays a number; these are value bands, not text menu choices. When the family changes, every lane smoothly heads toward a new destination inside its family range. Within each family, destinations and travel times remain independent. Freeze pauses both the walks and Mixed's family timer. Rand changes the movement centers, preserving Character, Freeze, Wander, Smooth, Output, and Travel.
+
+The inner **Character Sound** rack exposes the actual separate Attack, Decay, Sustain, Release, and Filter Env lanes. Outer **Envelope** biases their destinations within the chosen family's ranges; at full Wander, the entire family range is available. Setting Wander lower makes that bias more pronounced. Envelope changes are heard most clearly on new notes: use repeated MIDI notes to compare keys/plucks/leads, and long chords to test pads. A held note will not restart its attack merely because the Attack control moves.
+
+The amplitude envelope mapping now spans 0.5–6000 ms attack, 40–5000 ms decay, 0.01–1 sustain, and 30–8000 ms release. These are mapping endpoints; the family destination ranges use Live's macro scale. Filter envelopes follow attack/decay/release with independently moving depth. The lowpass range extends to 120 Hz. Low sustain and slow attacks are intentional in some families, so a short note can be very quiet while morphing toward a pad.
+
+Four complementary source blends use Round, Saw, FM Bell, and Pulse. FM Bell is a generated periodic FM-style waveform, not a real-time FM operator engine. Native stereo spread and chorus add width; this is not a new unison oscillator or acoustic-piano sampler. No acoustic piano samples or noise oscillator are included. Source fundamentals retain polarity/alignment reinforcement and RMS/peak constraints, and output limiting remains in place. Character shapes useful synthesis ranges rather than guaranteeing a named acoustic instrument or equal loudness.
+
+The Character controller adds tests for family selection boundaries, frozen family timers, destination bounds, and continuous transitions on family changes. Existing Walk behavior remains covered by its original tests.
+
+Character integration check: loaded in Live 11.3.43 Intro with the updated controller, which discovered the rack without errors. Fifteen inner macro lanes, including the separate envelope controls, were observed moving; Output stayed at its manual setting. Twelve algorithm/adapter tests pass. Saved a separate Character Demo Set for listening; family-by-family listening and exact envelope timing calibration remain unverified.

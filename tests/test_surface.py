@@ -39,6 +39,20 @@ class SurfaceTests(unittest.TestCase):
         self.controller=surface.InfisoundWalk(types.SimpleNamespace(tracks=[self.track],return_tracks=[]))
         self.controller._discover()
 
+    def test_character_adapter_moves_envelopes_and_protects_output(self):
+        self.outer.name='Infisound Character'
+        self.inner.name='Character Sound'
+        self.outer.parameters[10].name='Character'
+        self.outer.parameters[10].value=0
+        self.controller._walk_racks={}
+        self.controller._discover()
+        self.assertEqual(len(self.controller._walk_racks[self.outer][2]),15)
+        self.controller._last_tick-=.1
+        self.controller.update_display()
+        self.assertEqual(self.inner.parameters[15].value,64)
+        for i in (9,10,11,12,15):
+            self.assertNotEqual(self.inner.parameters[i+1].value,64)
+
     def test_discovers_and_removes_instances(self):
         self.assertEqual(len(self.controller._walk_racks),1)
         self.track.devices=[]

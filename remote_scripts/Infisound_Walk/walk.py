@@ -13,19 +13,21 @@ class Walk:
         self.phase = 1.0
         self.duration_factor = 1.0
 
-    def retarget(self, center, depth):
+    def retarget(self, center, depth, bounds=None):
         self.start = self.value
         radius = 127.0 * depth / 127.0
         low, high = max(0.0, center-radius), min(127.0, center+radius)
+        if bounds is not None:
+            low, high = bounds
         self.target = self.rng.uniform(low, high)
         self.duration_factor = self.rng.uniform(.65, 1.45)
         self.phase = 0.0
 
-    def step(self, dt, center, depth, rate, smooth, frozen=False, changed=False):
+    def step(self, dt, center, depth, rate, smooth, frozen=False, changed=False, bounds=None):
         if frozen:
             return self.value
         if changed or self.phase >= 1.0:
-            self.retarget(center, depth)
+            self.retarget(center, depth, bounds)
         self.phase = min(1.0, self.phase + dt / (seconds(rate)*self.duration_factor))
         t = self.phase
         eased = t*t*(3.0-2.0*t)
