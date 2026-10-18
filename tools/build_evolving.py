@@ -32,12 +32,12 @@ sound=devices[0].find('Device/InstrumentGroupDevice');fxrack=devices[1].find('De
 # Preserve each bank's own device mappings, remove only parent-to-bank links.
 for bank in [sound,fxrack]:
  for i in range(16):unmap(bank.find(f'MacroControls.{i}'))
-setv(rack,'UserName','Infisound Evolving');setv(rack,'Annotation','Automatic smooth random motion at 0.1 Hz. Hold a chord. Freeze holds the modulation outputs. Depth reduces movement around the center. Wave/type switches and pitch remain stable.');setv(rack,'AreDevicesVisible',False)
+setv(rack,'UserName','Infisound Evolving');setv(rack,'Annotation','Continuous sine sweeps with randomized variation at 0.1 Hz. Hold a chord. Freeze holds the modulation outputs. Depth reduces movement around the center. Wave/type switches and pitch remain stable.');setv(rack,'AreDevicesVisible',False)
 names=['Tone','Texture','Space','Motion','Width','Resonance','Echo','Grain','Brightness','Pan Speed','Freeze','Depth','Smooth','Wave','Output','Attack']
 values=[64]*10+[0,100,127,20,96,35]
 for i,(name,value) in enumerate(zip(names,values)):
  setv(rack,f'MacroDisplayNames.{i}',name);manual(rack,f'MacroControls.{i}',value);setv(rack,f'MacroDefaults.{i}',value);setv(rack,f'ExcludeMacroFromRandomization.{i}',True);setv(rack,f'ForceDisplayGenericValue.{i}',True)
- setv(rack,f'MacroAnnotations.{i}',('Automated by a smoothed random LFO at 0.1 Hz.' if i<10 else {'Freeze':'0: moving; 127: hold current modulation values.','Depth':'Movement depth around each lane midpoint; changing it can shift the current value.','Smooth':'LFO smoothing, default 100%. Not an exact morph-duration control.','Wave':'Manual waveform selection; not swept automatically.','Output':'Final gain, excluded from automatic motion.','Attack':'Manual note attack time.'}[name]))
+ setv(rack,f'MacroAnnotations.{i}',('Automated by a smoothed sine LFO with jitter at 0.1 Hz.' if i<10 else {'Freeze':'0: moving; 127: hold current modulation values.','Depth':'Movement depth around each lane midpoint; changing it can shift the current value.','Smooth':'LFO smoothing, default 100%. Not an exact morph-duration control.','Wave':'Manual waveform selection; not swept automatically.','Output':'Final gain, excluded from automatic motion.','Attack':'Manual note attack time.'}[name]))
 # Pair only continuous controls; never animate oscillator selection or effect enums.
 sound_maps={0:(0,25,115),1:(0,5,65),3:(15,0,110),7:(4,0,80),8:(5,5,65),10:(3,0,70),11:(3,15,65)}
 fx_maps={0:(1,0,70),2:(1,5,85),3:(3,5,75),4:(5,0,65),6:(7,0,45),7:(7,100,35),8:(4,0,85),9:(9,10,80),10:(6,5,85),12:(6,10,65),13:(2,10,90),14:(2,20,90),15:(8,15,100)}
@@ -63,13 +63,42 @@ for i in range(10):
  setv(lfo,'UserName',f'Evolve {names[i]}');setv(lfo,'IsFolded',True)
  setv(lfo,'PatchSlot/Value/MxDPatchRef/FileRef/Path',lfo_path)
  parameters={p.find('Name').get('Value'):p for p in lfo.findall('ParameterList/ParameterList/*')}
- for name,value in {'Depth':100,'Freq Rate':.1,'Hold':0,'Jitter':0,'Offset':0,'Phase':0,'Re-Trigger':0,'Shape':5,'Smooth':100,'Time Mode':0}.items():manual(parameters[name],'Timeable',value)
+ for name,value in {'Depth':100,'Freq Rate':4.22948265,'Hold':0,'Jitter':20,'Offset':0,'Phase':i*10,'Re-Trigger':0,'Shape':0,'Smooth':100,'Time Mode':0}.items():manual(parameters[name],'Timeable',value)
  for name,idx,lo,hi in [('Hold',10,0,1),('Depth',11,0,100),('Smooth',12,50,100)]:mapto(parameters[name],'Timeable',idx,lo,hi)
  for ref in lfo.findall('IdRefList/IdRefList/MxDIdRef'):setv(ref,'LomId',target_id)
  blob=lfo.find('.//Blob');state=json.loads(bytes.fromhex(blob.text).rstrip(b'\x00').decode())
  state['TargetMin[7]']=[20];state['TargetMax[7]']=[80]
  blob.text=(json.dumps(state)+'\n\x00').encode().hex().upper()
  devices.append(wrap(lfo,len(devices)))
+# Live stores the frequency dial in a nonlinear internal scale. This value was
+# obtained by entering 0.1 Hz in Live 11.3.43 and saving the Set.
+# A separate outer rack owns manual offsets: native Rand cannot write parameters
+# already owned by an LFO. The inner bank retains the actual modulation targets.
+outer = copy.deepcopy(g)
+outer_device = outer.find('Device/InstrumentGroupDevice')
+outer_devices = outer.find('BranchPresets/InstrumentBranchPreset/DevicePresets')
+for child in list(outer_devices): outer_devices.remove(child)
+for lom in outer_device.iter('LomId'): lom.set('Value', '0')
+setv(rack, 'UserName', 'Evolving Sound')
+setv(outer_device, 'UserName', 'Infisound Evolving')
+setv(outer_device, 'AreDevicesVisible', True)
+setv(outer_device, 'Annotation', 'Continuous ten-second sweep cycles with randomized variation. Rand changes the ten movement centers. Freeze holds movement. Wave, output, and attack stay manual.')
+for i in range(16):
+ setv(outer_device, f'ExcludeMacroFromRandomization.{i}', i >= 10)
+ setv(outer_device, f'MacroAnnotations.{i}', 'Randomizable movement center; the inner sound continues to evolve.' if i < 10 else names[i])
+ if i < 10:
+  manual(outer_device, f'MacroControls.{i}', 64)
+ else:
+  mapto(rack, f'MacroControls.{i}', i, 0, 127)
+lfopresets = [p for p in list(devices) if p.find('Device/MxDeviceAudioEffect') is not None]
+for p in lfopresets: devices.remove(p)
+g.set('Id', '0'); outer_devices.append(g)
+for i,p in enumerate(lfopresets):
+ lfo=p.find('Device/MxDeviceAudioEffect')
+ offset=next(p for p in lfo.findall('ParameterList/ParameterList/*') if p.find('Name').get('Value')=='Offset')
+ mapto(offset, 'Timeable', i, -35, 35)
+ p.set('Id', str(i+1)); outer_devices.append(p)
+root.remove(g); root.append(outer)
 # Remove obsolete source metadata but retain native device identity in PatchSlot.
 for parent in root.iter():
  for child in list(parent):
@@ -84,12 +113,20 @@ for i,lfo in enumerate(lfos):
  assert {int(r.find('LomId').get('Value')) for r in lfo.findall('IdRefList/IdRefList/*')}=={target}
  assert int(rack.find(f'MacroControls.{i}/LomId').get('Value'))==target
  p={e.find('Name').get('Value'):e for e in lfo.findall('ParameterList/ParameterList/*')}
- assert p['Shape'].find('Timeable/Manual').get('Value')=='5'
- assert float(p['Freq Rate'].find('Timeable/Manual').get('Value'))==.1
+ assert p['Shape'].find('Timeable/Manual').get('Value')=='0'
+ assert float(p['Freq Rate'].find('Timeable/Manual').get('Value'))==4.22948265
  assert p['Time Mode'].find('Timeable/Manual').get('Value')=='0'
+ assert p['Jitter'].find('Timeable/Manual').get('Value')=='20'
+ assert int(p['Phase'].find('Timeable/Manual').get('Value'))==i*10
 for bank,indexes in [(sound,[2,9,12,13,15]),(fxrack,[1,5,11])]:
  for idx in indexes:
   k=bank.find(f'MacroControls.{idx}/KeyMidi')
   assert k is None or int(k.find('NoteOrController').get('Value'))>=10
 for p in root.findall('.//SampleRef/FileRef/Path'):assert Path(p.get('Value')).is_file()
-print('PASS: 10 smoothed random 0.1 Hz modulators; unique restored targets; stable waveform/type/pitch/delay-time controls; all sample paths resolve.')
+for i in range(16):
+ assert outer_device.find(f'ExcludeMacroFromRandomization.{i}').get('Value') == ('false' if i < 10 else 'true')
+for i,lfo in enumerate(lfos):
+ offset=next(p for p in lfo.findall('ParameterList/ParameterList/*') if p.find('Name').get('Value')=='Offset')
+ assert int(offset.find('Timeable/KeyMidi/NoteOrController').get('Value'))==i
+assert all(e.get('Value')=='0' for e in outer_device.iter('LomId'))
+print('PASS: randomizable outer centers, protected safety controls, 10 continuous 0.1 Hz sweep modulators with jitter; unique restored targets; stable waveform/type/pitch/delay-time controls; all sample paths resolve.')

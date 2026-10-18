@@ -10,7 +10,7 @@ A programmable Ableton Live instrument rack for exploring randomized synth sound
 
 The expanded controls include filter type and resonance, separate release, filter modulation, LFO speed and shape, vibrato, velocity response, glide, distortion curves, chorus, phaser/flanger/doubler, bitcrushing, stereo auto-pan, delay feedback, and reverb damping.
 
-**Infisound Evolving** adds ten independent, smoothed random LFO lanes running at 0.1 Hz (a roughly ten-second cycle). It is designed for held notes and evolving textures. Waveform, effect types, pitch, delay time, and output are kept out of automatic modulation.
+**Infisound Evolving** adds ten phase-staggered sine LFO lanes with 20% jitter and smoothing, running at 0.1 Hz (a roughly ten-second cycle). It is designed for held notes and evolving textures. Waveform, effect types, pitch, delay time, and output are kept out of automatic modulation.
 
 ## Requirements
 
@@ -81,15 +81,15 @@ Wave selects discrete timbres: Sine, Triangle, Saw, Square, Pulse, Hollow, Organ
 
 ## Evolving controls
 
-Load **Infisound Evolving.adg** onto a MIDI track and play or hold notes. Its ten sound macros are driven automatically, without pressing Rand:
+Load **Infisound Evolving.adg** onto a MIDI track and play or hold notes. The outer rack sets the movement centers; the gray macros inside **Evolving Sound** show the changing values. The inner rack is visible by default.
 
-- Tone, Texture, Space, Motion, Width, Resonance, Echo, Grain, Brightness, and Pan Speed move independently.
+- Press the outer **Rand** button to randomize the centers for Tone, Texture, Space, Motion, Width, Resonance, Echo, Grain, Brightness, and Pan Speed. These outer knobs stay still between presses; ten phase-staggered LFOs with randomized variation continuously move the corresponding inner controls. Rand changes offsets immediately; it does not trigger a synchronized ten-second morph.
 - **Freeze**: turn fully up to hold the modulation outputs; return to zero to resume.
 - **Depth**: reduce for subtler movement around the midpoint. Changing depth can shift the current value.
 - **Smooth**: controls the native LFO smoothing, from 50% to 100%; it is not a duration in seconds.
-- **Wave**, **Output**, and **Attack** remain manual. All macros are excluded from Rand in this variant.
+- **Wave**, **Output**, and **Attack** remain manual. The last six controls, including Freeze, Depth, and Smooth, are excluded from Rand.
 
-This uses the built-in Ableton LFO included with Live 11 Intro; it does not require a custom Max for Live device. The LFO file is referenced from the installed application. The rack uses independent random modulation with smoothing, rather than coordinated preset-to-preset interpolation: the 0.1 Hz cycle is approximately ten seconds, and smoothing can extend the transition.
+This uses the built-in Ableton LFO included with Live 11 Intro; it does not require a custom Max for Live device. The LFO file is referenced from the installed application. The rack uses continuous sine sweeps with 20% jitter for randomized variation. Each cycle is approximately ten seconds. It does not choose an independent random patch every ten seconds or interpolate between stored presets. Random-wave mode was tested and rejected because it glided briefly and then held; sine mode keeps the motion flowing.
 
 ## Implementation and validation
 
@@ -97,7 +97,7 @@ An `.adg` is a gzip-compressed XML preset. The builders read device schemas from
 
 The expanded builder asserts macro coverage, waveform selection coverage without gaps or overlaps, sample-file existence, a shared reverb instance, and an unmapped final output gain. These checks do not replace loading and listening in Live.
 
-The evolving builder checks all ten LFO rates, Random mode, restored target identities, sample paths, and exclusion of discrete switches from automatic mapping. Live received the generated rack during testing, but the app-control connection timed out before the loaded UI could be inspected. Runtime verification is still pending; structural checks alone do not prove that Live restores the mappings or that Freeze behaves correctly.
+The evolving builder checks all ten LFO rates, sine mode, restored target identities, sample paths, and exclusion of discrete switches from automatic mapping. The first version incorrectly wrote the frequency dial as 0.1, which Live displayed near 0 Hz. The corrected builder uses 4.22948265, measured by entering 0.1 Hz in Live 11.3.43 and saving the Set. A separate outer rack owns the randomizable LFO offsets, because native Rand cannot write LFO-owned macros. The repaired preset loads in Live and its outer Rand has been verified to change the first ten controls while preserving the final six. The corrected Random-wave version continued changing across multiple cycles, but its smoothing left long holds. The sine-with-jitter version loaded in Live and its inner macro values were observed moving between screenshots. The user verified Rand on the repaired outer-rack architecture. Freeze still needs a complete pause/resume check, and exhaustive listening tests remain outstanding.
 
 Remaining limitations:
 
