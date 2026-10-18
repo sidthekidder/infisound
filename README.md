@@ -12,6 +12,8 @@ The expanded controls include filter type and resonance, separate release, filte
 
 **Infisound Evolving** adds ten phase-staggered sine LFO lanes with 20% jitter and smoothing, running at 0.1 Hz (a roughly ten-second cycle). It is designed for held notes and evolving textures. Waveform, effect types, pitch, delay time, and output are kept out of automatic modulation.
 
+**Infisound Transform** emphasizes large changes in timbre. Two nested crossfade axes blend four continuously triggered sources: Sine, Saw, Metal, and Vowel. Eleven LFOs move the blend, filter, envelopes, and effects.
+
 ## Requirements
 
 - Python 3.9 or later; no external Python packages.
@@ -28,6 +30,7 @@ On macOS with Live 11 Intro in its default application location:
 python3 tools/build_rack.py
 python3 tools/build_expanded.py
 python3 tools/build_evolving.py
+python3 tools/build_transform.py
 ```
 
 For another installation, set the Core Library location first:
@@ -90,6 +93,18 @@ Load **Infisound Evolving.adg** onto a MIDI track and play or hold notes. The ou
 - **Wave**, **Output**, and **Attack** remain manual. The last six controls, including Freeze, Depth, and Smooth, are excluded from Rand.
 
 This uses the built-in Ableton LFO included with Live 11 Intro; it does not require a custom Max for Live device. The LFO file is referenced from the installed application. The rack uses continuous sine sweeps with 20% jitter for randomized variation. Each cycle is approximately ten seconds. It does not choose an independent random patch every ten seconds or interpolate between stored presets. Random-wave mode was tested and rejected because it glided briefly and then held; sine mode keeps the motion flowing.
+
+## Transform controls
+
+Build after Evolving and load `dist/Infisound Transform/Infisound Transform.adg`. Keep the Expanded sample folder in place.
+
+- **Morph** blends the Sine/Saw pair with the Metal/Vowel pair. **Material** crossfades within each pair. All four voices have full MIDI selector ranges, with complementary audio fades, so held notes can change timbre.
+- **Tone** spans a much wider filter range. **Texture** adds stronger drive and chorus; **Grain** reaches deeper bitcrushing.
+- **Envelope** varies attack, sustain, and decay. **Space** also changes release. Envelope changes affect note articulation and are most obvious with new notes. **Env Depth** remains manual.
+- The outer knobs are movement centers; **Moving Sound** shows actual changing values. **Rand** changes the first ten centers plus Morph. Freeze, Depth, Smooth, Output, and Env Depth stay protected.
+- Depth defaults to maximum. Two crossfade stages and additional headroom help contain the combined voices, but this is not loudness-normalized; timbres can differ in perceived level.
+
+Transform checks four voices, full MIDI zones, complementary fade endpoints, eleven LFOs, sample paths, and output protection. The preset loaded in Live 11.3.43 Intro and both morph controls were observed moving. Listening and held-note crossfade verification are still required.
 
 ## Implementation and validation
 
