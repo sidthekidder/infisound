@@ -31,6 +31,7 @@ python3 tools/build_rack.py
 python3 tools/build_expanded.py
 python3 tools/build_evolving.py
 python3 tools/build_transform.py
+python3 tools/build_walk.py
 ```
 
 For another installation, set the Core Library location first:
@@ -51,6 +52,11 @@ dist/
     Samples/
   Infisound Evolving/
     Infisound Evolving.adg
+  Infisound Transform/
+    Infisound Transform.adg
+    Samples/
+  Infisound Walk/
+    Infisound Walk.adg
 ```
 
 Build in the order shown above. Evolving uses Expanded and its generated samples; keep both output folders. Build the base rack before the expanded rack; the expanded builder uses its device structure. Generated files are excluded from Git because their sample references contain absolute local paths. Keep the generated folders in place, or use Live's **Collect All and Save** when moving a Set.
@@ -132,3 +138,29 @@ Remaining limitations:
 - [Live 11 audio effect reference](https://www.ableton.com/en/live-manual/11/live-audio-effect-reference/)
 
 Ableton Live and its Core Library are required separately. This repository does not include the installed Core Library or third-party plugins.
+
+## Independent random walks (Live 11)
+
+**Infisound Walk** replaces the repeating LFOs with eleven independent pseudorandom journeys. Each lane chooses its own destination and duration, then immediately begins another journey on arrival. There is no shared phase or deliberate hold stage. The four-source audio graph and bounded sound mappings come from Transform.
+
+Build the four racks above, then run:
+
+```sh
+python3 tools/build_walk.py
+```
+
+Copy `remote_scripts/Infisound_Walk` into your Ableton User Library's `Remote Scripts` folder, restart Live, and select **Infisound Walk** in one unused Control Surface slot under Preferences → Link/Tempo/MIDI. Set Input and Output to **None**; no MIDI hardware or Max authoring license is needed. Enable it in only one slot. See [Ableton's installation instructions](https://help.ableton.com/hc/en-us/articles/209072009-Installing-third-party-remote-scripts).
+
+Load `dist/Infisound Walk/Infisound Walk.adg`. Keep `dist/Infisound Transform/Samples` available, or use Collect All and Save. The controller recognizes the exact outer name **Infisound Walk**, its sixteen macro names, and the inner name **Walking Sound**; preserve these names. It discovers new instances automatically, including racks nested in chains.
+
+- **Rand** changes the eleven movement centers and starts fresh journeys from their current values. The outer controls stay still between presses; **Walking Sound** shows the actual moving values.
+- **Wander** sets the destination radius around each center. At maximum every lane can explore its full range. At zero it smoothly returns to its center.
+- **Travel 2–60s** sets average journey duration exponentially: 0 = 2 seconds, 60 ≈ 10 seconds, 127 = 60 seconds. Every lane independently varies this by 0.65–1.45×. Changing the rate keeps its current position.
+- **Smooth** blends linear travel (0) with eased departures and arrivals (127), without a hold stage.
+- **Freeze** pauses at 64 or higher; return below 64 to resume. Turning the outer rack off also pauses its walks. Output remains manual and protected from Rand.
+
+The controller runs on Live's main-thread display timer (roughly 100 ms), not at audio rate. It pauses progress through long UI stalls instead of jumping ahead. Existing automation on inner target macros takes priority; the script does not re-enable overridden automation. Output, pitch, effect types, and delay-time switches are never written by the controller. Outer macro variations store the centers/settings, not the random generator's state; a newly opened Set starts new journeys from saved inner values.
+
+Run `python3 -m unittest discover -s tests -v` to check bounds, independent destinations, freeze/resume, rate continuity, and zero-depth behavior. These are algorithm checks; Live integration and listening are separate checks.
+
+Live integration: the controller loaded in Live 11.3.43 Intro with MIDI input/output set to None, discovered the generated rack, and all eleven inner macros were observed changing independently. Seven automated algorithm/adapter tests pass. Full listening and parameter-extreme checks remain separate.
